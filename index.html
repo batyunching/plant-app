@@ -2,27 +2,19 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <!-- 確保在平板/手機上比例正確 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>國中植物界探究學習網</title>
   
-  <!-- 載入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- 載入 React -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  
-  <!-- 載入 Babel (用來在瀏覽器翻譯 JSX) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- 載入 Firebase (Compat 版本，最適合單一 HTML 檔案) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 
   <style>
-    /* 全局動畫與捲軸樣式 */
     body { background-color: #F0FDF4; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
@@ -35,10 +27,8 @@
   </style>
 </head>
 <body>
-  <!-- React 應用程式的掛載點 -->
   <div id="root"></div>
 
-  <!-- 應用程式邏輯 -->
   <script type="text/babel">
     const { useState, useEffect } = React;
 
@@ -58,9 +48,6 @@
     const db = firebase.firestore();
     const appId = firebaseConfig.projectId;
 
-    // ==========================================
-    // 🌟 主任專屬設定區 🌟
-    // ==========================================
     const CAMPUS_MAP_URL = 'https://drive.google.com/thumbnail?id=13Cw97kVaRvnIRPqhzF3ST9V1qLnCXiBj&sz=w1200'; 
 
     // --- 工具函數區 ---
@@ -100,19 +87,12 @@
             const maxSize = 400;
 
             if (width > height) {
-              if (width > maxSize) {
-                height *= maxSize / width;
-                width = maxSize;
-              }
+              if (width > maxSize) { height *= maxSize / width; width = maxSize; }
             } else {
-              if (height > maxSize) {
-                width *= maxSize / height;
-                height = maxSize;
-              }
+              if (height > maxSize) { width *= maxSize / height; height = maxSize; }
             }
 
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             resolve(canvas.toDataURL('image/jpeg', 0.7));
@@ -122,6 +102,15 @@
         reader.readAsDataURL(file);
       });
     };
+
+    function shuffleArray(array) {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    }
 
     // --- 資料定義區 ---
     const CATEGORIES = [
@@ -185,7 +174,7 @@
     ];
 
     // --- 元件區 ---
-    function TeamProfileModal({ profile, onSave, onCancel, canCancel }) {
+    function TeamProfileModal({ profile, onSave, onCancel, canCancel, isRestoring }) {
       const CLASSES = Array.from({ length: 13 }, (_, i) => 701 + i);
       const GROUPS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -229,26 +218,26 @@
               <h2 className="text-2xl font-black flex items-center justify-center gap-2">
                 <span>📝</span> 班級小組報到
               </h2>
-              <p className="mt-2 text-emerald-100 text-sm">開始探究前，請先建立您的探究小隊！</p>
+              <p className="mt-2 text-emerald-100 text-sm">輸入相同班級組別，即可自動接續上次進度！</p>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-emerald-800 font-bold mb-1">選擇班級</label>
-                  <select value={classId} onChange={e => setClassId(Number(e.target.value))} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                  <select value={classId} onChange={e => setClassId(Number(e.target.value))} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
                     {CLASSES.map(c => <option key={c} value={c}>{c} 班</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-emerald-800 font-bold mb-1">選擇組別</label>
-                  <select value={groupId} onChange={e => setGroupId(Number(e.target.value))} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                  <select value={groupId} onChange={e => setGroupId(Number(e.target.value))} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
                     {GROUPS.map(g => <option key={g} value={g}>第 {g} 組</option>)}
                   </select>
                 </div>
               </div>
               <div>
                 <label className="block text-emerald-800 font-bold mb-1">小組人數</label>
-                <select value={memberCount} onChange={handleMemberCountChange} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                <select value={memberCount} onChange={handleMemberCountChange} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
                   {[2, 3, 4, 5, 6].map(num => <option key={num} value={num}>{num} 人</option>)}
                 </select>
               </div>
@@ -258,15 +247,18 @@
                   {seatNumbers.map((seat, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <span className="text-gray-500 font-bold">{index + 1}.</span>
-                      <input type="number" min="1" max="50" placeholder="座號" value={seat} onChange={(e) => handleSeatChange(index, e.target.value)} className="w-full p-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 text-center font-bold text-lg" required />
+                      <input type="number" min="1" max="50" placeholder="座號" value={seat} onChange={(e) => handleSeatChange(index, e.target.value)} disabled={isRestoring} className="w-full p-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 text-center font-bold text-lg disabled:opacity-50" required />
                     </div>
                   ))}
                 </div>
               </div>
               {errorMsg && <div className="text-red-500 font-bold text-center">{errorMsg}</div>}
               <div className="pt-4 flex gap-3">
-                {canCancel && <button type="button" onClick={onCancel} className="flex-1 py-3 px-4 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors">取消</button>}
-                <button type="submit" className="flex-[2] py-3 px-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-lg">完成報到，開始任務！</button>
+                {canCancel && <button type="button" onClick={onCancel} disabled={isRestoring} className="flex-1 py-3 px-4 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">取消</button>}
+                <button type="submit" disabled={isRestoring} className="flex-[2] py-3 px-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-lg disabled:bg-emerald-400 flex justify-center items-center gap-2">
+                  {isRestoring ? <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : null}
+                  {isRestoring ? '正在尋找雲端紀錄...' : '完成報到，開始任務！'}
+                </button>
               </div>
             </form>
           </div>
@@ -350,20 +342,19 @@
       );
     }
 
-    function shuffleArray(array) {
-      const newArray = [...array];
-      for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-      }
-      return newArray;
-    }
-
     function MatchingTab() {
-      const [unmatchedFeatures, setUnmatchedFeatures] = useState(() => shuffleArray(FEATURES_DATA));
-      const [matchedRecords, setMatchedRecords] = useState([]);
-      const [selectedFeature, setSelectedFeature] = useState(null);
+      // 修改：將狀態安全地存入 LocalStorage，只儲存 ID 字串，避免儲存 SVG 圖示導致無法轉碼
+      const [matchingState, setMatchingState] = useLocalStorage('plant_matching_state', null);
+      
+      const state = matchingState || {
+        unmatchedIds: shuffleArray(FEATURES_DATA).map(f => f.id),
+        matchedRecords: [] // { featureId, category }
+      };
+
+      const [selectedFeatureId, setSelectedFeatureId] = useState(null);
       const [feedback, setFeedback] = useState({ show: false, message: '', type: '' });
+
+      const unmatchedFeatures = state.unmatchedIds.map(id => FEATURES_DATA.find(f => f.id === id));
 
       const showFeedback = (message, type) => {
         setFeedback({ show: true, message, type });
@@ -371,23 +362,32 @@
       };
 
       const handleFeatureClick = (feature) => {
-        setSelectedFeature(selectedFeature?.id === feature.id ? null : feature);
+        setSelectedFeatureId(selectedFeatureId === feature.id ? null : feature.id);
       };
 
       const handleCategoryClick = (category) => {
-        if (!selectedFeature) return showFeedback('請先點選下方的特徵卡片！', 'warning');
+        if (!selectedFeatureId) return showFeedback('請先點選下方的特徵卡片！', 'warning');
+        
+        const selectedFeature = FEATURES_DATA.find(f => f.id === selectedFeatureId);
+        
         if (selectedFeature.validTargets.includes(category)) {
-          setUnmatchedFeatures(prev => prev.filter(f => f.id !== selectedFeature.id));
-          setMatchedRecords(prev => [...prev, { feature: selectedFeature, category }]);
-          setSelectedFeature(null);
+          setMatchingState({
+            unmatchedIds: state.unmatchedIds.filter(id => id !== selectedFeatureId),
+            matchedRecords: [...state.matchedRecords, { featureId: selectedFeatureId, category }]
+          });
+          setSelectedFeatureId(null);
           showFeedback('配對成功！🎉', 'success');
         } else {
-          setSelectedFeature(null);
+          setSelectedFeatureId(null);
           showFeedback(`答錯囉！「${selectedFeature.text}」不屬於${category}`, 'error');
         }
       };
 
-      const resetGame = () => { setUnmatchedFeatures(shuffleArray(FEATURES_DATA)); setMatchedRecords([]); setSelectedFeature(null); };
+      const resetGame = () => { 
+        setMatchingState({ unmatchedIds: shuffleArray(FEATURES_DATA).map(f => f.id), matchedRecords: [] }); 
+        setSelectedFeatureId(null); 
+      };
+      
       const isComplete = unmatchedFeatures.length === 0;
 
       return (
@@ -401,14 +401,14 @@
           {isComplete && <div className="bg-green-100 border-2 border-green-400 p-8 rounded-2xl text-center mb-8 shadow-md"><div className="text-5xl mb-4">🏆</div><h3 className="text-3xl font-black text-green-700 mb-2">恭喜完成配對挑戰！</h3><p className="text-green-600 text-lg">您已經掌握了植物界的關鍵特徵！準備好進行校園尋寶了嗎？</p></div>}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8">
             {CATEGORIES.map(cat => {
-              const categoryMatches = matchedRecords.filter(m => m.category === cat.name);
-              const isSelectedTarget = selectedFeature !== null;
+              const categoryMatches = state.matchedRecords.filter(m => m.category === cat.name).map(m => FEATURES_DATA.find(f => f.id === m.featureId));
+              const isSelectedTarget = selectedFeatureId !== null;
               return (
                 <div key={cat.name} onClick={() => handleCategoryClick(cat.name)} className={`flex flex-col min-h-[160px] md:min-h-[200px] border-2 rounded-xl p-3 transition-all cursor-pointer relative overflow-hidden ${isSelectedTarget ? 'border-emerald-500 bg-emerald-50 hover:bg-emerald-100 shadow-md transform scale-105' : 'border-gray-200 bg-white hover:border-emerald-300'}`}>
                   <div className={`absolute -bottom-4 -right-4 w-24 h-24 opacity-[0.05] pointer-events-none transition-all ${isSelectedTarget ? 'text-emerald-700 opacity-10' : 'text-gray-500'}`}>{cat.icon}</div>
                   <div className="flex items-center justify-center gap-2 mb-3 pb-2 border-b-2 border-emerald-100"><span className="text-emerald-600 w-6 h-6">{cat.icon}</span><h3 className="text-center font-black text-xl text-emerald-800">{cat.name}</h3></div>
                   <div className="flex-1 flex flex-col gap-2 relative z-10">
-                    {categoryMatches.map((record, index) => <div key={index} className="bg-emerald-600 text-white text-sm md:text-base p-2 rounded flex items-center gap-2 shadow-sm"><span className="shrink-0">{record.feature.icon}</span><span className="leading-tight">{record.feature.text}</span></div>)}
+                    {categoryMatches.map((record, index) => <div key={index} className="bg-emerald-600 text-white text-sm md:text-base p-2 rounded flex items-center gap-2 shadow-sm"><span className="shrink-0">{record.icon}</span><span className="leading-tight">{record.text}</span></div>)}
                     {categoryMatches.length === 0 && <div className="text-gray-400 text-center text-sm mt-4">等待歸類...</div>}
                   </div>
                 </div>
@@ -420,8 +420,8 @@
               <h3 className="text-lg font-bold text-emerald-700 mb-4 border-l-4 border-emerald-500 pl-3">未歸類的特徵 ({unmatchedFeatures.length}/{FEATURES_DATA.length})</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                 {unmatchedFeatures.map(feature => (
-                  <button key={feature.id} onClick={() => handleFeatureClick(feature)} className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all shadow-sm text-center min-h-[100px] ${selectedFeature?.id === feature.id ? 'border-emerald-500 bg-emerald-500 text-white transform -translate-y-1 shadow-lg ring-4 ring-emerald-200' : 'border-white bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50'}`}>
-                    <div className={`mb-2 ${selectedFeature?.id === feature.id ? 'text-emerald-100' : 'text-emerald-600'}`}>{feature.icon}</div>
+                  <button key={feature.id} onClick={() => handleFeatureClick(feature)} className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all shadow-sm text-center min-h-[100px] ${selectedFeatureId === feature.id ? 'border-emerald-500 bg-emerald-500 text-white transform -translate-y-1 shadow-lg ring-4 ring-emerald-200' : 'border-white bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50'}`}>
+                    <div className={`mb-2 ${selectedFeatureId === feature.id ? 'text-emerald-100' : 'text-emerald-600'}`}>{feature.icon}</div>
                     <span className="font-bold text-sm md:text-base">{feature.text}</span>
                   </button>
                 ))}
@@ -433,7 +433,8 @@
     }
 
     function ExplorationTab() {
-      const [tasks, setTasks] = useLocalStorage('plant_exploration_tasks', CATEGORIES.map(c => ({ categoryName: c.name, icon: c.icon, photo: null, mapX: null, mapY: null, selectedFeatures: [] })));
+      // 修改：移除預設存放的 JSX Icon，避免存入 LocalStorage 時出錯
+      const [tasks, setTasks] = useLocalStorage('plant_exploration_tasks', CATEGORIES.map(c => ({ categoryName: c.name, photo: null, mapX: null, mapY: null, selectedFeatures: [] })));
       const [activeTaskIndex, setActiveTaskIndex] = useState(0);
       const activeTask = tasks[activeTaskIndex];
 
@@ -473,9 +474,10 @@
           <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
             {tasks.map((task, index) => {
               const isFinished = task.photo && task.mapX && task.selectedFeatures.length > 0;
+              const catIcon = CATEGORIES.find(c => c.name === task.categoryName)?.icon;
               return (
                 <button key={task.categoryName} onClick={() => setActiveTaskIndex(index)} className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 transition-all ${activeTaskIndex === index ? 'border-emerald-600 bg-emerald-600 text-white shadow-md' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'} ${isFinished && activeTaskIndex !== index ? 'border-green-400 bg-green-50' : ''}`}>
-                  <div className="w-6 h-6">{CATEGORIES[index].icon}</div><span>{task.categoryName}</span>
+                  <div className="w-6 h-6">{catIcon}</div><span>{task.categoryName}</span>
                   {isFinished && <span className="absolute top-1 right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>}
                 </button>
               );
@@ -620,7 +622,9 @@
       const [teamProfile, setTeamProfile] = useLocalStorage('plant_team_profile', null);
       const [showProfileModal, setShowProfileModal] = useState(false);
       const [user, setUser] = useState(null);
+      
       const [isSyncing, setIsSyncing] = useState(false);
+      const [isRestoring, setIsRestoring] = useState(false);
       const [syncMessage, setSyncMessage] = useState(null);
 
       useEffect(() => {
@@ -631,34 +635,93 @@
 
       useEffect(() => { if (!teamProfile) setShowProfileModal(true); }, [teamProfile]);
 
+      // --- 核心功能：登入時自動嘗試還原進度 ---
+      const handleProfileSave = async (profileData) => {
+        setIsRestoring(true);
+        try {
+          const recordId = `class${profileData.classId}_group${profileData.groupId}`;
+          // 為了支援跨設備接續進度，我們將路徑統一儲存在 public/data 下
+          const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('plant_records').doc(recordId);
+          const docSnap = await docRef.get();
+
+          if (docSnap.exists) {
+            const data = docSnap.data();
+            if(data.explorationTasks) window.localStorage.setItem('plant_exploration_tasks', JSON.stringify(data.explorationTasks));
+            if(data.quizState) window.localStorage.setItem('plant_quiz_state', JSON.stringify(data.quizState));
+            if(data.matchingState) window.localStorage.setItem('plant_matching_state', JSON.stringify(data.matchingState));
+            setSyncMessage({ text: '🎉 成功載入您上次的探究進度！', type: 'success' });
+          } else {
+            // 如果雲端沒有舊紀錄，就清空本機資料重新開始
+            window.localStorage.removeItem('plant_exploration_tasks');
+            window.localStorage.removeItem('plant_quiz_state');
+            window.localStorage.removeItem('plant_matching_state');
+            setSyncMessage({ text: '建立全新探究任務！', type: 'success' });
+          }
+        } catch (err) {
+          console.error("還原失敗", err);
+          setSyncMessage({ text: '無法連線至雲端，將開啟本機新任務。', type: 'error' });
+        } finally {
+          setTeamProfile(profileData);
+          setIsRestoring(false);
+          setShowProfileModal(false);
+          setTimeout(() => setSyncMessage(null), 3500);
+        }
+      };
+
+      // --- 核心功能：登出並清空資料 ---
+      const handleLogout = () => {
+        if(window.confirm('確定要登出並清空這台平板的資料嗎？\n(請確認剛剛已經「同步雲端」，否則尚未存檔的進度將會遺失喔！)')) {
+          window.localStorage.removeItem('plant_team_profile');
+          window.localStorage.removeItem('plant_exploration_tasks');
+          window.localStorage.removeItem('plant_quiz_state');
+          window.localStorage.removeItem('plant_matching_state');
+          setTeamProfile(null);
+          setActiveTab('knowledge');
+          setShowProfileModal(true); // 自動跳出登入視窗
+        }
+      };
+
+      // --- 核心功能：同步雲端 (覆蓋同一個班級組別檔案) ---
       const handleSyncToCloud = async () => {
-        if (!user) { setSyncMessage({ text: '尚未連線至雲端伺服器，請稍候或重新整理頁面。', type: 'error' }); setTimeout(() => setSyncMessage(null), 3000); return; }
+        if (!user) { setSyncMessage({ text: '尚未連線至雲端伺服器，請稍候。', type: 'error' }); setTimeout(() => setSyncMessage(null), 3000); return; }
         if (!teamProfile) { setSyncMessage({ text: '請先完成小組報到！', type: 'error' }); setTimeout(() => setSyncMessage(null), 3000); return; }
-        setIsSyncing(true); setSyncMessage({ text: '正在上傳資料至雲端...', type: 'info' });
+        
+        setIsSyncing(true); 
+        setSyncMessage({ text: '正在上傳資料至雲端...', type: 'info' });
+        
         try {
           const tasksRaw = window.localStorage.getItem('plant_exploration_tasks');
           const tasksData = tasksRaw ? JSON.parse(tasksRaw) : [];
           const quizRaw = window.localStorage.getItem('plant_quiz_state');
           const quizData = quizRaw ? JSON.parse(quizRaw) : {};
-          const recordId = `class${teamProfile.classId}_group${teamProfile.groupId}_${Date.now()}`;
+          const matchingRaw = window.localStorage.getItem('plant_matching_state');
+          const matchingData = matchingRaw ? JSON.parse(matchingRaw) : {};
           
-          // Compat 寫法：寫入 Firestore
-          await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('plant_records').doc(recordId).set({
-            teamProfile, explorationTasks: tasksData, quizState: quizData, timestamp: new Date().toISOString()
+          // 固定 ID：以班級與組別命名，這樣下次登入才能抓到同一個檔案
+          const recordId = `class${teamProfile.classId}_group${teamProfile.groupId}`;
+          
+          await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('plant_records').doc(recordId).set({
+            teamProfile, 
+            explorationTasks: tasksData, 
+            quizState: quizData, 
+            matchingState: matchingData,
+            lastUpdated: new Date().toLocaleString('zh-TW')
           });
 
-          setSyncMessage({ text: '🎉 資料同步成功！主任已收到您的成果。', type: 'success' });
+          setSyncMessage({ text: '🎉 資料同步成功！下課前請記得按登出。', type: 'success' });
         } catch (error) {
-          console.error("同步失敗:", error); setSyncMessage({ text: '同步失敗，請檢查網路狀態或權限設定。', type: 'error' });
+          console.error("同步失敗:", error); setSyncMessage({ text: '同步失敗，請檢查網路狀態。', type: 'error' });
         } finally {
-          setIsSyncing(false); setTimeout(() => setSyncMessage(null), 3000);
+          setIsSyncing(false); setTimeout(() => setSyncMessage(null), 4000);
         }
       };
 
       return (
         <div className="min-h-screen bg-[#F0FDF4] font-sans text-gray-800 selection:bg-emerald-200">
           {syncMessage && <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-lg text-lg font-bold text-white transition-all animate-fadeIn ${syncMessage.type === 'success' ? 'bg-green-500' : syncMessage.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}>{syncMessage.text}</div>}
-          {showProfileModal && <TeamProfileModal profile={teamProfile} onSave={(data) => {setTeamProfile(data); setShowProfileModal(false);}} onCancel={() => setShowProfileModal(false)} canCancel={teamProfile !== null} />}
+          
+          {showProfileModal && <TeamProfileModal profile={teamProfile} onSave={handleProfileSave} onCancel={() => setShowProfileModal(false)} canCancel={teamProfile !== null} isRestoring={isRestoring} />}
+          
           <header className="bg-emerald-700 text-white shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="text-center md:text-left">
@@ -672,9 +735,15 @@
                       <div className="font-black text-emerald-50 tracking-wider">{teamProfile.classId} 班 - 第 {teamProfile.groupId} 組</div>
                       <div className="text-sm text-emerald-200 mt-0.5">座號：{teamProfile.seatNumbers.join(', ')}</div>
                     </div>
-                    <button onClick={() => setShowProfileModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg transition-colors shadow-sm" title="修改小組資訊">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowProfileModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg transition-colors shadow-sm" title="修改小組資訊">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      </button>
+                      {/* 新增：登出與清空按鈕 */}
+                      <button onClick={handleLogout} className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg transition-colors shadow-sm border border-red-400" title="登出並清空這台平板資料">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                      </button>
+                    </div>
                   </div>
                   <button onClick={handleSyncToCloud} disabled={isSyncing} className={`flex items-center gap-2 px-4 py-3 rounded-xl font-bold shadow-md transition-all h-full ${isSyncing ? 'bg-gray-400 text-gray-100 cursor-not-allowed' : 'bg-amber-400 hover:bg-amber-300 text-amber-900 hover:-translate-y-1'}`}>
                     {isSyncing ? <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>}
@@ -684,7 +753,9 @@
               )}
             </div>
           </header>
-          <div className="max-w-6xl mx-auto px-4 mt-[-20px] relative z-10">
+          
+          {/* 利用 key 綁定 teamProfile，當登入新帳號時強制重新載入所有分頁狀態 */}
+          <div className="max-w-6xl mx-auto px-4 mt-[-20px] relative z-10" key={teamProfile ? `${teamProfile.classId}_${teamProfile.groupId}` : 'empty'}>
             <div className="flex bg-white rounded-t-2xl shadow-sm border-b border-gray-100 overflow-hidden">
               <TabButton id="knowledge" activeTab={activeTab} setActiveTab={setActiveTab} label="知識補給" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>} />
               <TabButton id="matching" activeTab={activeTab} setActiveTab={setActiveTab} label="特徵配對" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg>} />
