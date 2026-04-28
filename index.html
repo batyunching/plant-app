@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <!-- 確保在平板/手機上比例正確 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>國中植物界探究學習網</title>
+  
+  <!-- 載入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 載入 React -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- 載入 Babel (用來在瀏覽器翻譯 JSX) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 載入 Firebase (Compat 版本，最適合單一 HTML 檔案) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* 全局動畫與捲軸樣式 */
+    body { background-color: #F0FDF4; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #ecfdf5; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #34d399; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <!-- React 應用程式的掛載點 -->
+  <div id="root"></div>
+
+  <!-- 應用程式邏輯 -->
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // --- Firebase 初始化 ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyDxnSKXnf0XlwIprNPYFJoTIn366H5aqG0",
+      authDomain: "plant-app-5f12c.firebaseapp.com",
+      projectId: "plant-app-5f12c",
+      storageBucket: "plant-app-5f12c.firebasestorage.app",
+      messagingSenderId: "827683308210",
+      appId: "1:827683308210:web:f1a987ae0f658110a4bfab",
+      measurementId: "G-C5ESB0NRS5"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const appId = firebaseConfig.projectId;
+
+    // ==========================================
+    // 🌟 主任專屬設定區 🌟
+    // ==========================================
+    const CAMPUS_MAP_URL = 'https://drive.google.com/thumbnail?id=13Cw97kVaRvnIRPqhzF3ST9V1qLnCXiBj&sz=w1200'; 
+
+    // --- 工具函數區 ---
+    function useLocalStorage(key, initialValue) {
+      const [storedValue, setStoredValue] = useState(() => {
+        try {
+          const item = window.localStorage.getItem(key);
+          return item ? JSON.parse(item) : initialValue;
+        } catch (error) {
+          console.warn("讀取 LocalStorage 發生錯誤:", error);
+          return initialValue;
+        }
+      });
+
+      const setValue = (value) => {
+        try {
+          const valueToStore = value instanceof Function ? value(storedValue) : value;
+          setStoredValue(valueToStore);
+          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+          console.warn("儲存 LocalStorage 發生錯誤:", error);
+        }
+      };
+
+      return [storedValue, setValue];
+    }
+
+    const compressImage = (file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 400;
+
+            if (width > height) {
+              if (width > maxSize) {
+                height *= maxSize / width;
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width *= maxSize / height;
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    // --- 資料定義區 ---
+    const CATEGORIES = [
+      { name: '蘚苔', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8"><path d="M12 22V14M12 14C10 14 8 12 8 10S10 6 12 6S16 8 16 10S14 14 12 14ZM12 6V2M9 4H15"/></svg> },
+      { name: '蕨類', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8"><path d="M12 22V6c0-2 1-3 3-3s2 1 2 2-1 2-2 2M8 16c2-1 3-3 4-4M8 12c2-1 3-2 4-3M16 14c-1-1-2-2-4-3"/></svg> },
+      { name: '裸子', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8"><path d="M12 2l4 8h-2l4 8H6l4-8H4l4-8z" /></svg> },
+      { name: '單子葉', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8"><path d="M12 2C12 2 18 8 18 16C18 20 12 22 12 22C12 22 6 20 6 16C6 8 12 2 12 2Z"/><path d="M12 2v20M9 6v14M15 6v14"/></svg> },
+      { name: '雙子葉', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8"><path d="M12 2C12 2 20 8 20 16C20 20 12 22 12 22C12 22 4 20 4 16C4 8 12 2 12 2Z"/><path d="M12 2v20M12 10l4-2M12 14l5-3M12 18l3-2M12 10l-4-2M12 14l-5-3M12 18l-3-2"/></svg> }
+    ];
+
+    const FEATURES_DATA = [
+      { id: 1, text: '沒有維管束', validTargets: ['蘚苔'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22A10 10 0 1 0 12 2a10 10 0 0 0 0 20zM4.93 4.93l14.14 14.14"/></svg> },
+      { id: 2, text: '羽狀複葉', validTargets: ['蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22V2M12 12l5-4M12 16l4-3M12 8l3-2M12 12l-5-4M12 16l-4-3M12 8l-3-2"/></svg> },
+      { id: 3, text: '成熟葉背面有孢子囊堆', validTargets: ['蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 2C12 2 20 8 20 16C20 20 12 22 12 22C12 22 4 20 4 16C4 8 12 2 12 2Z"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/><circle cx="8" cy="16" r="1.5" fill="currentColor"/><circle cx="16" cy="16" r="1.5" fill="currentColor"/><circle cx="10" cy="10" r="1.5" fill="currentColor"/><circle cx="14" cy="10" r="1.5" fill="currentColor"/></svg> },
+      { id: 4, text: '幼葉捲曲', validTargets: ['蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22v-8M12 14c-2 0-4-1-4-3s2-3 4-3 4 1 4 3-2 3-4 3c-1 0-2-.5-2-1.5S11 11 12 11"/></svg> },
+      { id: 5, text: '地下莖', validTargets: ['蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M2 12h20M12 12V4M10 4h4M8 16c0 2 2 4 4 4M16 16c0 2-2 4-4 4"/></svg> },
+      { id: 6, text: '毬果', validTargets: ['裸子'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 2l3 5H9l3-5zM10 7l4 6H6l4-6zM8 13l6 7H4l4-7z"/></svg> },
+      { id: 7, text: '大多為針狀葉', validTargets: ['裸子'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22V2M8 4l4 18M16 4l-4 18"/></svg> },
+      { id: 8, text: '花瓣是 4 或 5 的倍數', validTargets: ['雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="3"/><path d="M12 9c-3-5 3-5 0 0M12 15c3 5-3 5 0 0M9 12c-5 3-5-3 0 0M15 12c5-3 5 3 0 0M10.5 10.5c-4-4 1-5 1.5-1.5M13.5 13.5c4 4-1 5-1.5 1.5"/></svg> },
+      { id: 9, text: '花瓣是 3 的倍數', validTargets: ['單子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="2"/><path d="M12 10c-3-6 3-6 0 0M10.5 13.5c-4 5-6-1 1.5-1.5M13.5 13.5c4 5 6-1-1.5-1.5"/></svg> },
+      { id: 10, text: '網狀脈', validTargets: ['雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 2C12 2 20 8 20 16C20 20 12 22 12 22C12 22 4 20 4 16C4 8 12 2 12 2Z"/><path d="M12 2v20M12 10l4-2M12 14l5-3M12 18l3-2M12 10l-4-2M12 14l-5-3M12 18l-3-2"/></svg> },
+      { id: 11, text: '平行脈', validTargets: ['單子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 2C12 2 18 8 18 16C18 20 12 22 12 22C12 22 6 20 6 16C6 8 12 2 12 2Z"/><path d="M12 2v20M9 6v14M15 6v14"/></svg> },
+      { id: 12, text: '種子裸露', validTargets: ['裸子'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 4C8 4 6 8 6 14s6 8 6 8 6-2 6-8-2-10-6-10z"/><circle cx="12" cy="14" r="3" fill="currentColor"/></svg> },
+      { id: 13, text: '會開花結果', validTargets: ['單子葉', '雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 10V2M10 4l2-2 2 2M8 14A4 4 0 1 0 8 22 4 4 0 1 0 8 14zM16 14A4 4 0 1 0 16 22 4 4 0 1 0 16 14z"/></svg> },
+      { id: 14, text: '用孢子繁殖', validTargets: ['蘚苔', '蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="8" strokeDasharray="2 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg> },
+      { id: 15, text: '維管束為環狀分佈', validTargets: ['雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="4" r="1.5" fill="currentColor"/><circle cx="12" cy="20" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="20" cy="12" r="1.5" fill="currentColor"/><circle cx="6.3" cy="6.3" r="1.5" fill="currentColor"/><circle cx="17.7" cy="17.7" r="1.5" fill="currentColor"/><circle cx="6.3" cy="17.7" r="1.5" fill="currentColor"/><circle cx="17.7" cy="6.3" r="1.5" fill="currentColor"/></svg> },
+      { id: 16, text: '維管束為散生', validTargets: ['單子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="14" r="1.5" fill="currentColor"/><circle cx="16" cy="15" r="1.5" fill="currentColor"/><circle cx="10" cy="18" r="1.5" fill="currentColor"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/><circle cx="7" cy="9" r="1.5" fill="currentColor"/></svg> },
+      { id: 17, text: '會開花結果', validTargets: ['單子葉', '雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 10V2M10 4l2-2 2 2M8 14A4 4 0 1 0 8 22 4 4 0 1 0 8 14zM16 14A4 4 0 1 0 16 22 4 4 0 1 0 16 14z"/></svg> },
+      { id: 18, text: '用孢子繁殖', validTargets: ['蘚苔', '蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><circle cx="12" cy="12" r="8" strokeDasharray="2 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg> },
+      { id: 19, text: '代表植物：土馬騣', validTargets: ['蘚苔'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22V14M12 14C10 14 8 12 8 10S10 6 12 6S16 8 16 10S14 14 12 14ZM12 6V2M9 4H15"/></svg> },
+      { id: 20, text: '代表植物：筆筒樹', validTargets: ['蕨類'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22V6c0-2 1-3 3-3s2 1 2 2-1 2-2 2M8 16c2-1 3-3 4-4M8 12c2-1 3-2 4-3M16 14c-1-1-2-2-4-3"/></svg> },
+      { id: 21, text: '代表植物：台灣二葉松', validTargets: ['裸子'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 2l4 8h-2l4 8H6l4-8H4l4-8z" /></svg> },
+      { id: 22, text: '代表植物：百合', validTargets: ['單子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22v-8M12 14C8 14 6 10 6 6c6 0 6 8 6 8zm0 0c4 0 6-4 6-8-6 0-6 8-6 8z"/></svg> },
+      { id: 23, text: '代表植物：榕樹', validTargets: ['雙子葉'], icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6"><path d="M12 22v-7"/><circle cx="12" cy="9" r="6" fill="currentColor" fillOpacity="0.2"/></svg> }
+    ];
+
+    const QUIZ_DATA = [
+      { id: 1, question: "蘚苔植物最主要的特徵是什麼？", options: ["具有網狀脈", "沒有維管束", "用種子繁殖", "具有地下莖"], answer: 1, explanation: "蘚苔植物因為沒有維管束，無法將水分往高處輸送，因此個體通常矮小，且必須生長在潮濕環境中。" },
+      { id: 2, question: "具有「羽狀複葉」與「幼葉捲曲」特徵的植物是哪一類？", options: ["蘚苔植物", "裸子植物", "蕨類植物", "單子葉植物"], answer: 2, explanation: "蕨類植物常見的特徵就是羽狀複葉，且幼葉多呈捲曲狀（如常見的過貓），成熟葉的背面常有孢子囊堆。" },
+      { id: 3, question: "哪一種植物的種子裸露，沒有果實保護？", options: ["被子植物", "蕨類植物", "蘚苔植物", "裸子植物"], answer: 3, explanation: "裸子植物會產生種子，但因為缺乏子房構造，種子會直接裸露在外（如松子），沒有果實包覆。" },
+      { id: 4, question: "雙子葉植物的葉脈通常呈現哪種型態？", options: ["平行脈", "網狀脈", "叉狀脈", "沒有葉脈"], answer: 1, explanation: "雙子葉植物具有網狀脈、環狀維管束及軸根系；單子葉植物則是平行脈、散生維管束及鬚根系。" },
+      { id: 5, question: "單子葉植物的花瓣數量通常是？", options: ["3 或 3的倍數", "4 或 4的倍數", "5 或 5的倍數", "不開花"], answer: 0, explanation: "單子葉植物的花瓣為 3 或 3 的倍數（如百合花常有 6 片花被）；雙子葉植物的花瓣則是 4、5 或其倍數。" },
+      { id: 6, question: "下列哪一種植物是用「孢子」繁殖的？", options: ["台灣二葉松", "百合", "筆筒樹", "榕樹"], answer: 2, explanation: "筆筒樹屬於蕨類植物，不開花結果，利用孢子繁殖。其他選項皆為種子植物（二葉松為裸子；百合、榕樹為被子）。" },
+      { id: 7, question: "維管束呈現「環狀排列」的是？", options: ["單子葉植物", "雙子葉植物", "蘚苔植物", "蕨類植物"], answer: 1, explanation: "雙子葉植物莖內的維管束呈環狀排列，因此多數具有形成層可以加粗；單子葉植物的維管束則是散生分布。" },
+      { id: 8, question: "松樹、柏樹大多具有毬果與針狀葉，它們屬於？", options: ["裸子植物", "單子葉植物", "雙子葉植物", "蕨類植物"], answer: 0, explanation: "松、柏等植物不會開出真正的花，其生殖器官為毬果，靠風力傳播花粉與種子，屬於裸子植物。" },
+      { id: 9, question: "觀察到一株植物的花瓣有 5 片，它最可能是？", options: ["蘚苔植物", "裸子植物", "單子葉植物", "雙子葉植物"], answer: 3, explanation: "有花瓣代表是被子植物（開花植物）。雙子葉植物的花瓣數量常為 4、5 或其倍數；單子葉則為 3 的倍數。" },
+      { id: 10, question: "承上題，這株花瓣 5 片的植物，其莖內的維管束排列應該為？", options: ["環狀排列", "散生排列", "沒有維管束", "成星狀排列"], answer: 0, explanation: "花瓣 5 片代表是雙子葉植物。雙子葉植物的莖內維管束呈環狀排列，並具有網狀脈。" }
+    ];
+
+    const EXPLORATION_CHECKLIST = [
+      { title: "(1) 維管束", options: ["有", "無"] },
+      { title: "(2) 葉形", options: ["羽狀複葉", "幼葉捲曲", "大多針狀葉"] },
+      { title: "(3) 繁殖方式", options: ["種子", "孢子"] },
+      { title: "(4) 地下莖", options: ["有", "無"] },
+      { title: "(5) 葉脈", options: ["平行脈", "網狀脈"] },
+      { title: "(6) 維管束 (排列)", options: ["散生", "環狀分布"] },
+      { title: "(7) 毬果", options: ["有", "無"] },
+      { title: "(8) 開花結果", options: ["有", "無"] },
+      { title: "(9) 種子裸露或包裹", options: ["裸露", "被果實包裹"] },
+      { title: "(10) 花瓣數", options: ["3的倍數", "4或5的倍數"] }
+    ];
+
+    // --- 元件區 ---
+    function TeamProfileModal({ profile, onSave, onCancel, canCancel }) {
+      const CLASSES = Array.from({ length: 13 }, (_, i) => 701 + i);
+      const GROUPS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+      const [classId, setClassId] = useState(profile?.classId || 701);
+      const [groupId, setGroupId] = useState(profile?.groupId || 1);
+      const [memberCount, setMemberCount] = useState(profile?.seatNumbers?.length || 4);
+      const [seatNumbers, setSeatNumbers] = useState(profile?.seatNumbers || Array(4).fill(''));
+      const [errorMsg, setErrorMsg] = useState('');
+
+      const handleMemberCountChange = (e) => {
+        const count = parseInt(e.target.value, 10);
+        setMemberCount(count);
+        setSeatNumbers(prev => {
+          const newSeats = [...prev];
+          while (newSeats.length < count) newSeats.push('');
+          return newSeats.slice(0, count);
+        });
+      };
+
+      const handleSeatChange = (index, value) => {
+        const newSeats = [...seatNumbers];
+        newSeats[index] = value;
+        setSeatNumbers(newSeats);
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (seatNumbers.some(seat => !seat.toString().trim())) {
+          setErrorMsg("請填寫所有組員的座號喔！");
+          setTimeout(() => setErrorMsg(''), 3000);
+          return;
+        }
+        setErrorMsg('');
+        onSave({ classId, groupId, seatNumbers });
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-emerald-600 p-6 text-white text-center">
+              <h2 className="text-2xl font-black flex items-center justify-center gap-2">
+                <span>📝</span> 班級小組報到
+              </h2>
+              <p className="mt-2 text-emerald-100 text-sm">開始探究前，請先建立您的探究小隊！</p>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-emerald-800 font-bold mb-1">選擇班級</label>
+                  <select value={classId} onChange={e => setClassId(Number(e.target.value))} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                    {CLASSES.map(c => <option key={c} value={c}>{c} 班</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-emerald-800 font-bold mb-1">選擇組別</label>
+                  <select value={groupId} onChange={e => setGroupId(Number(e.target.value))} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                    {GROUPS.map(g => <option key={g} value={g}>第 {g} 組</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-emerald-800 font-bold mb-1">小組人數</label>
+                <select value={memberCount} onChange={handleMemberCountChange} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer">
+                  {[2, 3, 4, 5, 6].map(num => <option key={num} value={num}>{num} 人</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-emerald-800 font-bold mb-2">輸入組員座號</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {seatNumbers.map((seat, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-gray-500 font-bold">{index + 1}.</span>
+                      <input type="number" min="1" max="50" placeholder="座號" value={seat} onChange={(e) => handleSeatChange(index, e.target.value)} className="w-full p-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 text-center font-bold text-lg" required />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {errorMsg && <div className="text-red-500 font-bold text-center">{errorMsg}</div>}
+              <div className="pt-4 flex gap-3">
+                {canCancel && <button type="button" onClick={onCancel} className="flex-1 py-3 px-4 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors">取消</button>}
+                <button type="submit" className="flex-[2] py-3 px-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-lg">完成報到，開始任務！</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function TabButton({ id, activeTab, setActiveTab, label, icon }) {
+      const isActive = activeTab === id;
+      return (
+        <button onClick={() => setActiveTab(id)} className={`flex-1 py-4 px-2 flex flex-col items-center justify-center gap-2 transition-all duration-300 ${isActive ? 'bg-emerald-600 text-white shadow-inner rounded-t-xl' : 'bg-white text-emerald-700 hover:bg-emerald-50'}`}>
+          {icon}
+          <span className="font-bold text-sm md:text-lg">{label}</span>
+        </button>
+      );
+    }
+
+    function KnowledgeTab() {
+      return (
+        <div className="space-y-8 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8 border border-emerald-100">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-emerald-800 mb-6 flex items-center gap-3"><span className="bg-emerald-100 p-2 rounded-lg">🌿</span> 植物界四大類</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100 relative overflow-hidden">
+                <div className="absolute top-2 right-2 text-emerald-200 opacity-30 w-24 h-24 pointer-events-none">{CATEGORIES[0].icon}</div>
+                <h3 className="text-xl font-bold text-emerald-700 mb-3 flex items-center gap-2"><span className="text-emerald-500">{CATEGORIES[0].icon}</span> 1. 蘚苔植物</h3>
+                <ul className="space-y-2 text-gray-700 text-lg relative z-10">
+                  <li>• <strong>沒有維管束</strong>，水分與養分靠細胞間傳遞。</li>
+                  <li>• 個體矮小，必須生長在潮濕的環境。</li>
+                  <li>• <strong>用孢子繁殖</strong>。</li>
+                  <li>• 常見種類：地錢、土馬騣。</li>
+                </ul>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100 relative overflow-hidden">
+                <div className="absolute top-2 right-2 text-emerald-200 opacity-30 w-24 h-24 pointer-events-none">{CATEGORIES[1].icon}</div>
+                <h3 className="text-xl font-bold text-emerald-700 mb-3 flex items-center gap-2"><span className="text-emerald-500">{CATEGORIES[1].icon}</span> 2. 蕨類植物</h3>
+                <ul className="space-y-2 text-gray-700 text-lg relative z-10">
+                  <li>• <strong>有維管束</strong>。有根莖葉的構造，多為<strong>地下莖</strong>。</li>
+                  <li>• 多為羽狀複葉，<strong>幼葉常呈捲曲狀</strong>。</li>
+                  <li>• <strong>用孢子繁殖</strong>，成熟葉背面有孢子囊堆。</li>
+                  <li>• 常見種類：筆筒樹、鳥巢蕨、台灣桫欏。</li>
+                </ul>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100 relative overflow-hidden">
+                <div className="absolute top-2 right-2 text-emerald-200 opacity-30 w-24 h-24 pointer-events-none">{CATEGORIES[2].icon}</div>
+                <h3 className="text-xl font-bold text-emerald-700 mb-3 flex items-center gap-2"><span className="text-emerald-500">{CATEGORIES[2].icon}</span> 3. 裸子植物</h3>
+                <ul className="space-y-2 text-gray-700 text-lg relative z-10">
+                  <li>• <strong>有維管束</strong>，會產生種子。</li>
+                  <li>• <strong>種子裸露</strong>，沒有果實保護。</li>
+                  <li>• 生殖器官為<strong>毬果</strong>，葉片大多為針狀。</li>
+                  <li>• 常見種類：台灣二葉松、紅檜、蘇鐵、銀杏。</li>
+                </ul>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100 relative overflow-hidden">
+                <h3 className="text-xl font-bold text-emerald-700 mb-3 flex items-center gap-2"><span className="text-emerald-500"><svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 10V2M10 4l2-2 2 2M8 14A4 4 0 1 0 8 22 4 4 0 1 0 8 14zM16 14A4 4 0 1 0 16 22 4 4 0 1 0 16 14z"/></svg></span> 4. 被子植物 (開花植物)</h3>
+                <ul className="space-y-2 text-gray-700 text-lg relative z-10">
+                  <li>• <strong>有維管束</strong>，植物界中種類最多。</li>
+                  <li>• <strong>會開花結果</strong>，種子藏在果實內受到保護。</li>
+                  <li>• 依據種子內子葉數目，分為<strong>單子葉植物</strong>與<strong>雙子葉植物</strong>。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8 border border-emerald-100">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-emerald-800 mb-6 flex items-center gap-3"><span className="bg-emerald-100 p-2 rounded-lg">🌸</span> 單子葉 vs 雙子葉比較</h2>
+            <div className="overflow-x-auto rounded-xl border border-emerald-200">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead><tr className="bg-emerald-600 text-white"><th className="p-4 font-bold text-lg">比較特徵</th><th className="p-4 font-bold text-lg">單子葉植物</th><th className="p-4 font-bold text-lg">雙子葉植物</th></tr></thead>
+                <tbody className="text-lg">
+                  <tr className="border-b border-emerald-100 bg-white"><td className="p-4 font-semibold text-emerald-800">子葉數目</td><td className="p-4">1 枚</td><td className="p-4">2 枚</td></tr>
+                  <tr className="border-b border-emerald-100 bg-emerald-50/30"><td className="p-4 font-semibold text-emerald-800">葉脈型態</td><td className="p-4 font-bold text-emerald-700">平行脈</td><td className="p-4 font-bold text-emerald-700">網狀脈</td></tr>
+                  <tr className="border-b border-emerald-100 bg-white"><td className="p-4 font-semibold text-emerald-800">莖內維管束</td><td className="p-4 font-bold text-emerald-700">散生</td><td className="p-4 font-bold text-emerald-700">環狀排列</td></tr>
+                  <tr className="border-b border-emerald-100 bg-emerald-50/30"><td className="p-4 font-semibold text-emerald-800">根系型態</td><td className="p-4">鬚根</td><td className="p-4">軸根</td></tr>
+                  <tr className="border-b border-emerald-100 bg-white"><td className="p-4 font-semibold text-emerald-800">花瓣數目</td><td className="p-4">3 或 3 的倍數</td><td className="p-4">4、5 或其倍數</td></tr>
+                  <tr className="bg-emerald-50/30"><td className="p-4 font-semibold text-emerald-800">常見例子</td><td className="p-4">稻、麥、玉米、百合、竹</td><td className="p-4">榕樹、杜鵑、玫瑰、豆類、菊</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function shuffleArray(array) {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    }
+
+    function MatchingTab() {
+      const [unmatchedFeatures, setUnmatchedFeatures] = useState(() => shuffleArray(FEATURES_DATA));
+      const [matchedRecords, setMatchedRecords] = useState([]);
+      const [selectedFeature, setSelectedFeature] = useState(null);
+      const [feedback, setFeedback] = useState({ show: false, message: '', type: '' });
+
+      const showFeedback = (message, type) => {
+        setFeedback({ show: true, message, type });
+        setTimeout(() => setFeedback({ show: false, message: '', type: '' }), 2000);
+      };
+
+      const handleFeatureClick = (feature) => {
+        setSelectedFeature(selectedFeature?.id === feature.id ? null : feature);
+      };
+
+      const handleCategoryClick = (category) => {
+        if (!selectedFeature) return showFeedback('請先點選下方的特徵卡片！', 'warning');
+        if (selectedFeature.validTargets.includes(category)) {
+          setUnmatchedFeatures(prev => prev.filter(f => f.id !== selectedFeature.id));
+          setMatchedRecords(prev => [...prev, { feature: selectedFeature, category }]);
+          setSelectedFeature(null);
+          showFeedback('配對成功！🎉', 'success');
+        } else {
+          setSelectedFeature(null);
+          showFeedback(`答錯囉！「${selectedFeature.text}」不屬於${category}`, 'error');
+        }
+      };
+
+      const resetGame = () => { setUnmatchedFeatures(shuffleArray(FEATURES_DATA)); setMatchedRecords([]); setSelectedFeature(null); };
+      const isComplete = unmatchedFeatures.length === 0;
+
+      return (
+        <div className="flex flex-col h-full animate-fadeIn">
+          {feedback.show && <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-lg text-lg font-bold text-white transition-all ${feedback.type === 'success' ? 'bg-green-500' : feedback.type === 'error' ? 'bg-red-500' : 'bg-amber-500'}`}>{feedback.message}</div>}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl md:text-2xl font-bold text-emerald-800">🎮 植物特徵配對任務</h2>
+            <button onClick={resetGame} className="px-4 py-2 bg-emerald-100 text-emerald-700 font-bold rounded-lg hover:bg-emerald-200">重新開始</button>
+          </div>
+          <div className="text-emerald-700 bg-white p-3 md:p-4 rounded-xl shadow-sm mb-6 border border-emerald-100 text-lg"><strong>操作方式：</strong>先點選下方未配對的「特徵卡片」，再點擊上方的「植物類別」進行歸類。</div>
+          {isComplete && <div className="bg-green-100 border-2 border-green-400 p-8 rounded-2xl text-center mb-8 shadow-md"><div className="text-5xl mb-4">🏆</div><h3 className="text-3xl font-black text-green-700 mb-2">恭喜完成配對挑戰！</h3><p className="text-green-600 text-lg">您已經掌握了植物界的關鍵特徵！準備好進行校園尋寶了嗎？</p></div>}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8">
+            {CATEGORIES.map(cat => {
+              const categoryMatches = matchedRecords.filter(m => m.category === cat.name);
+              const isSelectedTarget = selectedFeature !== null;
+              return (
+                <div key={cat.name} onClick={() => handleCategoryClick(cat.name)} className={`flex flex-col min-h-[160px] md:min-h-[200px] border-2 rounded-xl p-3 transition-all cursor-pointer relative overflow-hidden ${isSelectedTarget ? 'border-emerald-500 bg-emerald-50 hover:bg-emerald-100 shadow-md transform scale-105' : 'border-gray-200 bg-white hover:border-emerald-300'}`}>
+                  <div className={`absolute -bottom-4 -right-4 w-24 h-24 opacity-[0.05] pointer-events-none transition-all ${isSelectedTarget ? 'text-emerald-700 opacity-10' : 'text-gray-500'}`}>{cat.icon}</div>
+                  <div className="flex items-center justify-center gap-2 mb-3 pb-2 border-b-2 border-emerald-100"><span className="text-emerald-600 w-6 h-6">{cat.icon}</span><h3 className="text-center font-black text-xl text-emerald-800">{cat.name}</h3></div>
+                  <div className="flex-1 flex flex-col gap-2 relative z-10">
+                    {categoryMatches.map((record, index) => <div key={index} className="bg-emerald-600 text-white text-sm md:text-base p-2 rounded flex items-center gap-2 shadow-sm"><span className="shrink-0">{record.feature.icon}</span><span className="leading-tight">{record.feature.text}</span></div>)}
+                    {categoryMatches.length === 0 && <div className="text-gray-400 text-center text-sm mt-4">等待歸類...</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!isComplete && (
+            <div className="bg-emerald-50/50 p-4 md:p-6 rounded-2xl border border-emerald-100">
+              <h3 className="text-lg font-bold text-emerald-700 mb-4 border-l-4 border-emerald-500 pl-3">未歸類的特徵 ({unmatchedFeatures.length}/{FEATURES_DATA.length})</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                {unmatchedFeatures.map(feature => (
+                  <button key={feature.id} onClick={() => handleFeatureClick(feature)} className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all shadow-sm text-center min-h-[100px] ${selectedFeature?.id === feature.id ? 'border-emerald-500 bg-emerald-500 text-white transform -translate-y-1 shadow-lg ring-4 ring-emerald-200' : 'border-white bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50'}`}>
+                    <div className={`mb-2 ${selectedFeature?.id === feature.id ? 'text-emerald-100' : 'text-emerald-600'}`}>{feature.icon}</div>
+                    <span className="font-bold text-sm md:text-base">{feature.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function ExplorationTab() {
+      const [tasks, setTasks] = useLocalStorage('plant_exploration_tasks', CATEGORIES.map(c => ({ categoryName: c.name, icon: c.icon, photo: null, mapX: null, mapY: null, selectedFeatures: [] })));
+      const [activeTaskIndex, setActiveTaskIndex] = useState(0);
+      const activeTask = tasks[activeTaskIndex];
+
+      const handlePhotoCapture = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const compressedBase64 = await compressImage(file);
+        const newTasks = [...tasks];
+        newTasks[activeTaskIndex].photo = compressedBase64;
+        setTasks(newTasks);
+      };
+
+      const handleMapClick = (e) => {
+        const rect = e.target.getBoundingClientRect();
+        const newTasks = [...tasks];
+        newTasks[activeTaskIndex].mapX = ((e.clientX - rect.left) / rect.width) * 100;
+        newTasks[activeTaskIndex].mapY = ((e.clientY - rect.top) / rect.height) * 100;
+        setTasks(newTasks);
+      };
+
+      const handleFeatureToggle = (featureId) => {
+        const newTasks = [...tasks];
+        const currentSelected = newTasks[activeTaskIndex].selectedFeatures;
+        newTasks[activeTaskIndex].selectedFeatures = currentSelected.includes(featureId) ? currentSelected.filter(id => id !== featureId) : [...currentSelected, featureId];
+        setTasks(newTasks);
+      };
+
+      const isTaskComplete = activeTask.photo && activeTask.mapX && activeTask.selectedFeatures.length > 0;
+      const completedTasksCount = tasks.filter(t => t.photo && t.mapX && t.selectedFeatures.length > 0).length;
+
+      return (
+        <div className="animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-emerald-800 flex items-center gap-2"><span>🔍</span> 校園植物尋寶</h2>
+            <div className="bg-emerald-100 text-emerald-800 font-bold px-4 py-2 rounded-full">完成進度: {completedTasksCount} / 5</div>
+          </div>
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            {tasks.map((task, index) => {
+              const isFinished = task.photo && task.mapX && task.selectedFeatures.length > 0;
+              return (
+                <button key={task.categoryName} onClick={() => setActiveTaskIndex(index)} className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 transition-all ${activeTaskIndex === index ? 'border-emerald-600 bg-emerald-600 text-white shadow-md' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'} ${isFinished && activeTaskIndex !== index ? 'border-green-400 bg-green-50' : ''}`}>
+                  <div className="w-6 h-6">{CATEGORIES[index].icon}</div><span>{task.categoryName}</span>
+                  {isFinished && <span className="absolute top-1 right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 md:p-6 mb-8">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
+              <h3 className="text-xl font-bold text-emerald-700 flex items-center gap-2">任務：尋找並記錄一株「{activeTask.categoryName}植物」</h3>
+              {isTaskComplete && <span className="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-sm">✅ 已完成</span>}
+            </div>
+            <div className="flex flex-col gap-8">
+              <div className="bg-emerald-50 p-4 md:p-6 rounded-xl border border-emerald-100">
+                <h4 className="font-bold text-emerald-800 mb-4 text-lg">📸 1. 拍攝植物照片</h4>
+                {activeTask.photo ? (
+                  <div className="relative rounded-xl overflow-hidden border-2 border-emerald-300">
+                    <img src={activeTask.photo} alt="Student Capture" className="w-full h-64 md:h-96 object-cover" />
+                    <label className="absolute bottom-4 right-4 bg-white/95 text-emerald-800 px-4 py-2 rounded-lg font-black cursor-pointer shadow-lg hover:bg-white transition-all border border-emerald-100">重新拍攝<input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} /></label>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-64 md:h-96 border-4 border-dashed border-emerald-400 bg-white rounded-xl cursor-pointer hover:bg-emerald-50 transition-all text-emerald-600">
+                    <svg className="w-16 h-16 md:w-20 md:h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span className="font-bold text-lg md:text-xl">點擊開啟相機</span><input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
+                  </label>
+                )}
+              </div>
+              <div className="bg-emerald-50 p-4 md:p-6 rounded-xl border border-emerald-100">
+                <h4 className="font-bold text-emerald-800 mb-4 text-lg">📍 2. 在地圖標記發現位置</h4>
+                <div className="relative w-full h-64 md:h-[450px] bg-[#f8fdfa] rounded-xl border-4 border-emerald-400 cursor-crosshair overflow-hidden shadow-inner" onClick={handleMapClick} style={{ backgroundImage: `url('${CAMPUS_MAP_URL}')`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }}>
+                  <div className="absolute inset-0 bg-black/5 hover:bg-transparent transition-all pointer-events-none flex items-start justify-center pt-4"><span className="bg-white/95 px-5 py-2 rounded-full text-sm md:text-base font-black text-emerald-800 shadow-md border border-emerald-100">大觀國中校園平面圖 (點擊標記位置)</span></div>
+                  {activeTask.mapX !== null && <div className="absolute w-10 h-10 -ml-5 -mt-10 text-red-500 drop-shadow-lg transition-all duration-300 ease-out animate-bounce" style={{ left: `${activeTask.mapX}%`, top: `${activeTask.mapY}%` }}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>}
+                </div>
+              </div>
+              <div className="bg-emerald-50 p-4 md:p-6 rounded-xl border border-emerald-100">
+                <h4 className="font-bold text-emerald-800 mb-3 text-lg">✅ 3. 勾選判斷依據 (可複選)</h4>
+                <p className="text-sm md:text-base text-emerald-600 mb-5">請跟著下方分類，一一觀察並勾選這株植物具備的特徵：</p>
+                <div className="flex flex-col gap-4 max-h-[380px] md:max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                  {EXPLORATION_CHECKLIST.map((item, catIndex) => (
+                    <div key={catIndex} className="bg-white p-4 rounded-xl border border-emerald-200 shadow-sm">
+                      <div className="font-bold text-emerald-800 mb-3 md:text-lg border-b border-emerald-50 pb-2">{item.title}</div>
+                      <div className="flex flex-wrap gap-3">
+                        {item.options.map((opt, optIndex) => {
+                          const featureId = `${catIndex}-${optIndex}`;
+                          const isSelected = activeTask.selectedFeatures.includes(featureId);
+                          return (
+                            <label key={optIndex} className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 cursor-pointer transition-all ${isSelected ? 'border-emerald-500 bg-emerald-100 text-emerald-800 font-bold shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:bg-emerald-50 hover:border-emerald-300'}`}>
+                              <input type="checkbox" className="w-5 h-5 text-emerald-600 rounded border-emerald-300 focus:ring-emerald-500" checked={isSelected} onChange={() => handleFeatureToggle(featureId)} />
+                              <span className="text-base md:text-lg">{opt}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function QuizTab() {
+      const [quizState, setQuizState] = useLocalStorage('plant_quiz_state', { answers: {}, isSubmitted: false, score: 0 });
+      const [quizMsg, setQuizMsg] = useState('');
+      const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+      const handleOptionSelect = (qId, optionIndex) => {
+        if (quizState.isSubmitted) return;
+        setQuizState(prev => ({ ...prev, answers: { ...prev.answers, [qId]: optionIndex } }));
+      };
+
+      const handleSubmit = () => {
+        if (Object.keys(quizState.answers).length < QUIZ_DATA.length) {
+          setQuizMsg("還有題目未作答完畢喔！"); setTimeout(() => setQuizMsg(''), 3000); return;
+        }
+        let calculatedScore = 0;
+        QUIZ_DATA.forEach(q => { if (quizState.answers[q.id] === q.answer) calculatedScore += 10; });
+        setQuizState(prev => ({ ...prev, isSubmitted: true, score: calculatedScore }));
+      };
+
+      const handleConfirmReset = () => { setQuizState({ answers: {}, isSubmitted: false, score: 0 }); setShowConfirmReset(false); };
+
+      return (
+        <div className="max-w-3xl mx-auto animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-extrabold text-emerald-800 flex items-center gap-2"><span>📝</span> 實戰測驗</h2>
+            {quizState.isSubmitted && <button onClick={() => setShowConfirmReset(true)} className="text-emerald-600 font-bold hover:bg-emerald-100 px-3 py-1 rounded">重新測驗</button>}
+          </div>
+          {showConfirmReset && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl p-6 shadow-xl text-center max-w-sm">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">確定要重新測驗嗎？</h3><p className="text-gray-600 mb-6">這將會清除您目前的成績。</p>
+                <div className="flex gap-3 justify-center">
+                  <button onClick={() => setShowConfirmReset(false)} className="px-6 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold hover:bg-gray-200">取消</button>
+                  <button onClick={handleConfirmReset} className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700">確定重測</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {quizState.isSubmitted && (
+            <div className={`mb-8 p-6 rounded-2xl text-center border-4 shadow-lg ${quizState.score >= 80 ? 'bg-green-100 border-green-400' : quizState.score >= 60 ? 'bg-amber-100 border-amber-400' : 'bg-red-100 border-red-400'}`}>
+              <h3 className="text-2xl font-bold mb-2">測驗結果</h3>
+              <div className="text-6xl font-black mb-4"><span className={quizState.score >= 80 ? 'text-green-600' : quizState.score >= 60 ? 'text-amber-600' : 'text-red-600'}>{quizState.score}</span><span className="text-2xl text-gray-500"> / 100</span></div>
+              <p className="text-lg font-bold">{quizState.score >= 80 ? '🎉 太棒了！您已經是校園植物達人！' : quizState.score >= 60 ? '👍 表現不錯！再複習一下會更好喔！' : '💪 別氣餒，再看一次知識補給區吧！'}</p>
+            </div>
+          )}
+          <div className="space-y-6">
+            {QUIZ_DATA.map((q, index) => {
+              const userAnswer = quizState.answers[q.id];
+              const isCorrect = userAnswer === q.answer;
+              return (
+                <div key={q.id} className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex gap-2"><span className="text-emerald-600">Q{index + 1}.</span> {q.question}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {q.options.map((opt, optIdx) => {
+                      let buttonClass = "p-3 rounded-lg border-2 text-left font-semibold transition-all ";
+                      if (!quizState.isSubmitted) buttonClass += userAnswer === optIdx ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 text-gray-600";
+                      else if (optIdx === q.answer) buttonClass += "border-green-500 bg-green-100 text-green-800";
+                      else if (userAnswer === optIdx && !isCorrect) buttonClass += "border-red-500 bg-red-100 text-red-800 line-through";
+                      else buttonClass += "border-gray-100 bg-gray-50 text-gray-400 opacity-50";
+                      return <button key={optIdx} onClick={() => handleOptionSelect(q.id, optIdx)} disabled={quizState.isSubmitted} className={buttonClass}>{String.fromCharCode(65 + optIdx)}. {opt}</button>;
+                    })}
+                  </div>
+                  {quizState.isSubmitted && (
+                    <div className="mt-4 pt-4 border-t border-emerald-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                      <div className="flex-1 bg-blue-50 border border-blue-100 text-blue-800 p-3 rounded-lg text-sm md:text-base flex gap-2"><span className="text-blue-500 font-bold shrink-0">💡 解析：</span><span>{q.explanation}</span></div>
+                      <div className="text-right shrink-0 min-w-[100px]">{isCorrect ? <span className="text-green-600 font-bold text-lg">✔️ 答對了！</span> : <span className="text-red-500 font-bold text-lg">❌ 答錯了</span>}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {quizMsg && <div className="mt-4 text-red-500 font-bold text-center text-lg">{quizMsg}</div>}
+          {!quizState.isSubmitted && <div className="mt-8 text-center pb-8"><button onClick={handleSubmit} className="bg-emerald-600 text-white px-10 py-4 rounded-full text-xl font-black shadow-lg hover:bg-emerald-700 hover:shadow-xl transition-all transform hover:-translate-y-1">交卷看成績</button></div>}
+        </div>
+      );
+    }
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('knowledge');
+      const [teamProfile, setTeamProfile] = useLocalStorage('plant_team_profile', null);
+      const [showProfileModal, setShowProfileModal] = useState(false);
+      const [user, setUser] = useState(null);
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [syncMessage, setSyncMessage] = useState(null);
+
+      useEffect(() => {
+        auth.signInAnonymously().catch(err => console.error("Firebase 登入失敗:", err));
+        const unsubscribe = auth.onAuthStateChanged(setUser);
+        return () => unsubscribe();
+      }, []);
+
+      useEffect(() => { if (!teamProfile) setShowProfileModal(true); }, [teamProfile]);
+
+      const handleSyncToCloud = async () => {
+        if (!user) { setSyncMessage({ text: '尚未連線至雲端伺服器，請稍候或重新整理頁面。', type: 'error' }); setTimeout(() => setSyncMessage(null), 3000); return; }
+        if (!teamProfile) { setSyncMessage({ text: '請先完成小組報到！', type: 'error' }); setTimeout(() => setSyncMessage(null), 3000); return; }
+        setIsSyncing(true); setSyncMessage({ text: '正在上傳資料至雲端...', type: 'info' });
+        try {
+          const tasksRaw = window.localStorage.getItem('plant_exploration_tasks');
+          const tasksData = tasksRaw ? JSON.parse(tasksRaw) : [];
+          const quizRaw = window.localStorage.getItem('plant_quiz_state');
+          const quizData = quizRaw ? JSON.parse(quizRaw) : {};
+          const recordId = `class${teamProfile.classId}_group${teamProfile.groupId}_${Date.now()}`;
+          
+          // Compat 寫法：寫入 Firestore
+          await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('plant_records').doc(recordId).set({
+            teamProfile, explorationTasks: tasksData, quizState: quizData, timestamp: new Date().toISOString()
+          });
+
+          setSyncMessage({ text: '🎉 資料同步成功！主任已收到您的成果。', type: 'success' });
+        } catch (error) {
+          console.error("同步失敗:", error); setSyncMessage({ text: '同步失敗，請檢查網路狀態或權限設定。', type: 'error' });
+        } finally {
+          setIsSyncing(false); setTimeout(() => setSyncMessage(null), 3000);
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-[#F0FDF4] font-sans text-gray-800 selection:bg-emerald-200">
+          {syncMessage && <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-lg text-lg font-bold text-white transition-all animate-fadeIn ${syncMessage.type === 'success' ? 'bg-green-500' : syncMessage.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}>{syncMessage.text}</div>}
+          {showProfileModal && <TeamProfileModal profile={teamProfile} onSave={(data) => {setTeamProfile(data); setShowProfileModal(false);}} onCancel={() => setShowProfileModal(false)} canCancel={teamProfile !== null} />}
+          <header className="bg-emerald-700 text-white shadow-md">
+            <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="text-center md:text-left">
+                <h1 className="text-3xl md:text-4xl font-black tracking-wide">🌱 國中植物界探究學習網</h1>
+                <p className="text-emerald-100 mt-2 text-sm md:text-base">觀察、辨識、探索，成為校園植物達人！</p>
+              </div>
+              {teamProfile && (
+                <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
+                  <div className="bg-emerald-800/60 border border-emerald-600 rounded-xl p-3 flex items-center gap-4 shadow-inner">
+                    <div className="text-right">
+                      <div className="font-black text-emerald-50 tracking-wider">{teamProfile.classId} 班 - 第 {teamProfile.groupId} 組</div>
+                      <div className="text-sm text-emerald-200 mt-0.5">座號：{teamProfile.seatNumbers.join(', ')}</div>
+                    </div>
+                    <button onClick={() => setShowProfileModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg transition-colors shadow-sm" title="修改小組資訊">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    </button>
+                  </div>
+                  <button onClick={handleSyncToCloud} disabled={isSyncing} className={`flex items-center gap-2 px-4 py-3 rounded-xl font-bold shadow-md transition-all h-full ${isSyncing ? 'bg-gray-400 text-gray-100 cursor-not-allowed' : 'bg-amber-400 hover:bg-amber-300 text-amber-900 hover:-translate-y-1'}`}>
+                    {isSyncing ? <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>}
+                    <span>{isSyncing ? '上傳中...' : '同步雲端'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+          <div className="max-w-6xl mx-auto px-4 mt-[-20px] relative z-10">
+            <div className="flex bg-white rounded-t-2xl shadow-sm border-b border-gray-100 overflow-hidden">
+              <TabButton id="knowledge" activeTab={activeTab} setActiveTab={setActiveTab} label="知識補給" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>} />
+              <TabButton id="matching" activeTab={activeTab} setActiveTab={setActiveTab} label="特徵配對" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg>} />
+              <TabButton id="exploration" activeTab={activeTab} setActiveTab={setActiveTab} label="校園尋寶" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>} />
+              <TabButton id="quiz" activeTab={activeTab} setActiveTab={setActiveTab} label="實戰測驗" icon={<svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>} />
+            </div>
+            <main className="bg-[#f8fdfa] rounded-b-2xl shadow-sm p-4 md:p-8 min-h-[60vh] mb-12">
+              {activeTab === 'knowledge' && <KnowledgeTab />}
+              {activeTab === 'matching' && <MatchingTab />}
+              {activeTab === 'exploration' && <ExplorationTab />}
+              {activeTab === 'quiz' && <QuizTab />}
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
