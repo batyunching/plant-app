@@ -178,9 +178,10 @@
     // ==========================================
     // 🌟 教師專屬後台元件 🌟
     // ==========================================
-    function TeacherDashboard({ onClose, db, appId }) {
+    function TeacherDashboard({ onClose, db, appId, currentClassId }) {
       const [records, setRecords] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [filterClass, setFilterClass] = useState(currentClassId || 'all');
 
       const fetchRecords = async () => {
         setLoading(true);
@@ -206,14 +207,33 @@
         fetchRecords();
       }, []);
 
+      const displayedRecords = filterClass === 'all' 
+        ? records 
+        : records.filter(r => r.teamProfile?.classId === Number(filterClass));
+
+      const availableClasses = [...new Set(records.map(r => r.teamProfile?.classId))].filter(Boolean).sort();
+
       return (
         <div className="fixed inset-0 z-[100] bg-slate-100 flex flex-col animate-fadeIn overflow-hidden">
           {/* 後台標題列 */}
-          <header className="bg-slate-800 text-white p-4 md:p-6 shadow-md flex justify-between items-center shrink-0">
+          <header className="bg-slate-800 text-white p-4 md:p-6 shadow-md flex flex-col md:flex-row justify-between items-center shrink-0 gap-4">
             <h2 className="text-xl md:text-3xl font-black flex items-center gap-3">
               <span>👨‍🏫</span> 教師專屬後台 - 學習成果總覽
             </h2>
-            <div className="flex gap-2 md:gap-4">
+            <div className="flex flex-wrap justify-center items-center gap-2 md:gap-4">
+              <div className="flex items-center gap-2 bg-slate-700 rounded-lg px-3 py-2 border border-slate-600">
+                <span className="text-slate-300 text-sm font-bold">檢視班級:</span>
+                <select 
+                  value={filterClass} 
+                  onChange={(e) => setFilterClass(e.target.value)}
+                  className="bg-slate-700 text-white font-bold outline-none cursor-pointer"
+                >
+                  <option value="all">全校總覽</option>
+                  {availableClasses.map(c => (
+                    <option key={c} value={c}>{c} 班</option>
+                  ))}
+                </select>
+              </div>
               <button onClick={fetchRecords} className="bg-blue-600 hover:bg-blue-500 px-3 py-2 md:px-5 md:py-2 rounded-lg font-bold flex items-center gap-2 transition shadow-sm text-sm md:text-base">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 <span className="hidden md:inline">重新整理</span>
@@ -234,20 +254,20 @@
                   載入雲端資料中...
                 </div>
               </div>
-            ) : records.length === 0 ? (
+            ) : displayedRecords.length === 0 ? (
               <div className="text-center text-slate-500 text-2xl font-bold mt-20 flex flex-col items-center gap-4">
                 <svg className="w-24 h-24 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
-                目前還沒有任何小組上傳資料喔！
+                目前還沒有該班級的資料喔！
               </div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {records.map(record => (
+                {displayedRecords.map(record => (
                   <div key={record.id} className="bg-white rounded-2xl shadow-md border-2 border-slate-200 overflow-hidden hover:border-blue-300 transition-colors">
                     {/* 小組卡片標題列 */}
                     <div className="bg-slate-100 px-5 py-3 border-b border-slate-200 flex justify-between items-center">
                       <div className="font-black text-xl text-slate-800 flex items-center gap-2">
                         <span className="bg-blue-600 text-white text-sm px-2 py-1 rounded-md">{record.teamProfile?.classId} 班</span>
-                        第 {record.teamProfile?.groupId} 組
+                        {record.teamProfile?.groupId === 99 ? '老師組' : `第 ${record.teamProfile?.groupId} 組`}
                       </div>
                       <div className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
                         座號: {record.teamProfile?.seatNumbers?.filter(s=>s).join(', ') || '無'}
@@ -298,7 +318,6 @@
                                         const [catIdx, optIdx] = fId.split('-');
                                         const cat = EXPLORATION_CHECKLIST[parseInt(catIdx, 10)];
                                         if(!cat) return null;
-                                        // 去除標題前面的 (1) (2) 等數字，讓畫面更簡潔
                                         const cleanTitle = cat.title.replace(/^\(\d+\)\s*/, '');
                                         const optText = cat.options[parseInt(optIdx, 10)];
                                         return (
@@ -333,7 +352,6 @@
     }
     // ==========================================
 
-
     function TeamProfileModal({ profile, onSave, onCancel, canCancel, isRestoring }) {
       const CLASSES = Array.from({ length: 13 }, (_, i) => 701 + i);
       const GROUPS = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -343,6 +361,9 @@
       const [memberCount, setMemberCount] = useState(profile?.seatNumbers?.length || 4);
       const [seatNumbers, setSeatNumbers] = useState(profile?.seatNumbers || Array(4).fill(''));
       const [errorMsg, setErrorMsg] = useState('');
+      const [teacherPwd, setTeacherPwd] = useState('');
+
+      const isTeacher = groupId === 99;
 
       const handleMemberCountChange = (e) => {
         const count = parseInt(e.target.value, 10);
@@ -362,62 +383,93 @@
 
       const handleSubmit = (e) => {
         e.preventDefault();
-        if (seatNumbers.some(seat => !seat.toString().trim())) {
-          setErrorMsg("請填寫所有組員的座號喔！");
-          setTimeout(() => setErrorMsg(''), 3000);
-          return;
+        
+        if (isTeacher) {
+          // 教師專屬驗證：密碼必須是 8888 才能登入
+          if (teacherPwd !== '8888') {
+            setErrorMsg("教師密碼錯誤！無法登入。");
+            setTimeout(() => setErrorMsg(''), 3000);
+            return;
+          }
+          setErrorMsg('');
+          onSave({ classId, groupId, seatNumbers: ['老師'] });
+        } else {
+          // 學生驗證
+          if (seatNumbers.some(seat => !seat.toString().trim())) {
+            setErrorMsg("請填寫所有組員的座號喔！");
+            setTimeout(() => setErrorMsg(''), 3000);
+            return;
+          }
+          setErrorMsg('');
+          onSave({ classId, groupId, seatNumbers });
         }
-        setErrorMsg('');
-        onSave({ classId, groupId, seatNumbers });
       };
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="bg-emerald-600 p-6 text-white text-center">
+            <div className={`p-6 text-white text-center transition-colors ${isTeacher ? 'bg-blue-600' : 'bg-emerald-600'}`}>
               <h2 className="text-2xl font-black flex items-center justify-center gap-2">
-                <span>📝</span> 班級小組報到
+                <span>{isTeacher ? '👨‍🏫' : '📝'}</span> {isTeacher ? '教師專屬登入' : '班級小組報到'}
               </h2>
-              <p className="mt-2 text-emerald-100 text-sm">輸入相同班級組別，即可自動接續上次進度！</p>
+              <p className={`mt-2 text-sm ${isTeacher ? 'text-blue-100' : 'text-emerald-100'}`}>
+                {isTeacher ? '登入後可直接觀看該班的成果後台' : '輸入相同班級組別，即可自動接續上次進度！'}
+              </p>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-emerald-800 font-bold mb-1">選擇班級</label>
-                  <select value={classId} onChange={e => setClassId(Number(e.target.value))} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
+                  <label className={`block font-bold mb-1 ${isTeacher ? 'text-blue-800' : 'text-emerald-800'}`}>選擇班級</label>
+                  <select value={classId} onChange={e => setClassId(Number(e.target.value))} disabled={isRestoring} className={`w-full p-3 border-2 rounded-lg focus:ring-0 text-lg font-bold text-gray-700 cursor-pointer disabled:opacity-50 ${isTeacher ? 'border-blue-200 bg-blue-50 focus:border-blue-500' : 'border-emerald-200 bg-emerald-50 focus:border-emerald-500'}`}>
                     {CLASSES.map(c => <option key={c} value={c}>{c} 班</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-emerald-800 font-bold mb-1">選擇組別</label>
-                  <select value={groupId} onChange={e => setGroupId(Number(e.target.value))} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
+                  <label className={`block font-bold mb-1 ${isTeacher ? 'text-blue-800' : 'text-emerald-800'}`}>選擇組別</label>
+                  <select value={groupId} onChange={e => {setGroupId(Number(e.target.value)); setErrorMsg(''); setTeacherPwd('');}} disabled={isRestoring} className={`w-full p-3 border-2 rounded-lg focus:ring-0 text-lg font-bold text-gray-700 cursor-pointer disabled:opacity-50 ${isTeacher ? 'border-blue-200 bg-blue-50 focus:border-blue-500' : 'border-emerald-200 bg-emerald-50 focus:border-emerald-500'}`}>
                     {GROUPS.map(g => <option key={g} value={g}>第 {g} 組</option>)}
+                    <option value={99} className="font-bold text-blue-600">老師組</option>
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-emerald-800 font-bold mb-1">小組人數</label>
-                <select value={memberCount} onChange={handleMemberCountChange} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
-                  {[2, 3, 4, 5, 6].map(num => <option key={num} value={num}>{num} 人</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-emerald-800 font-bold mb-2">輸入組員座號</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {seatNumbers.map((seat, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="text-gray-500 font-bold">{index + 1}.</span>
-                      <input type="number" min="1" max="50" placeholder="座號" value={seat} onChange={(e) => handleSeatChange(index, e.target.value)} disabled={isRestoring} className="w-full p-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 text-center font-bold text-lg disabled:opacity-50" required />
+              
+              {/* 根據選擇的組別動態切換顯示內容 */}
+              {!isTeacher ? (
+                <>
+                  <div className="animate-fadeIn">
+                    <label className="block text-emerald-800 font-bold mb-1">小組人數</label>
+                    <select value={memberCount} onChange={handleMemberCountChange} disabled={isRestoring} className="w-full p-3 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-lg font-bold text-gray-700 bg-emerald-50 cursor-pointer disabled:opacity-50">
+                      {[2, 3, 4, 5, 6].map(num => <option key={num} value={num}>{num} 人</option>)}
+                    </select>
+                  </div>
+                  <div className="animate-fadeIn">
+                    <label className="block text-emerald-800 font-bold mb-2">輸入組員座號</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {seatNumbers.map((seat, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="text-gray-500 font-bold">{index + 1}.</span>
+                          <input type="number" min="1" max="50" placeholder="座號" value={seat} onChange={(e) => handleSeatChange(index, e.target.value)} disabled={isRestoring} className="w-full p-2 border-2 border-emerald-200 rounded-lg focus:border-emerald-500 text-center font-bold text-lg disabled:opacity-50" required />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                </>
+              ) : (
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 animate-fadeIn">
+                  <label className="block text-blue-800 font-bold mb-2 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    請輸入專屬登入密碼
+                  </label>
+                  <input type="password" placeholder="••••" value={teacherPwd} onChange={e => {setTeacherPwd(e.target.value); setErrorMsg('');}} disabled={isRestoring} className="w-full p-3 border-2 border-blue-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-center font-bold text-xl tracking-[0.5em] disabled:opacity-50" autoFocus required />
                 </div>
-              </div>
-              {errorMsg && <div className="text-red-500 font-bold text-center">{errorMsg}</div>}
+              )}
+
+              {errorMsg && <div className="text-red-500 font-bold text-center animate-fadeIn">{errorMsg}</div>}
               <div className="pt-4 flex gap-3">
                 {canCancel && <button type="button" onClick={onCancel} disabled={isRestoring} className="flex-1 py-3 px-4 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">取消</button>}
-                <button type="submit" disabled={isRestoring} className="flex-[2] py-3 px-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors shadow-lg disabled:bg-emerald-400 flex justify-center items-center gap-2">
+                <button type="submit" disabled={isRestoring} className={`flex-[2] py-3 px-4 text-white font-bold rounded-xl transition-colors shadow-lg disabled:opacity-50 flex justify-center items-center gap-2 ${isTeacher ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
                   {isRestoring ? <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : null}
-                  {isRestoring ? '正在尋找雲端紀錄...' : '完成報到，開始任務！'}
+                  {isRestoring ? '正在尋找雲端紀錄...' : (isTeacher ? '確認身分並登入' : '完成報到，開始任務！')}
                 </button>
               </div>
             </form>
@@ -786,13 +838,7 @@
       const [syncMessage, setSyncMessage] = useState(null);
 
       // 教師後台狀態管理
-      const [teacherClickCount, setTeacherClickCount] = useState(0);
       const [showTeacherDashboard, setShowTeacherDashboard] = useState(false);
-
-      // 新增：取代原生 prompt 與 confirm 的視窗狀態
-      const [showPwdModal, setShowPwdModal] = useState(false);
-      const [pwdInput, setPwdInput] = useState('');
-      const [pwdError, setPwdError] = useState('');
       const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
       useEffect(() => {
@@ -802,31 +848,6 @@
       }, []);
 
       useEffect(() => { if (!teamProfile) setShowProfileModal(true); }, [teamProfile]);
-
-      // --- 觸發教師後台的密碼機制 (修改版：使用精美自訂視窗) ---
-      const handleTitleClick = () => {
-        setTeacherClickCount(prev => {
-          const newCount = prev + 1;
-          if (newCount >= 5) {
-            setShowPwdModal(true); // 叫出密碼輸入視窗
-            setPwdInput('');
-            setPwdError('');
-            return 0; // 重置點擊次數
-          }
-          return newCount;
-        });
-      };
-
-      // 新增：驗證密碼的執行動作
-      const handlePwdSubmit = (e) => {
-        e.preventDefault();
-        if (pwdInput === "8888") {
-          setShowPwdModal(false);
-          setShowTeacherDashboard(true);
-        } else {
-          setPwdError("密碼錯誤！請重新輸入。");
-        }
-      };
 
       // --- 核心功能：登入時自動嘗試還原進度 ---
       const handleProfileSave = async (profileData) => {
@@ -859,12 +880,11 @@
         }
       };
 
-      // --- 核心功能：登出並清空資料 (修改版：使用精美自訂確認框) ---
+      // --- 核心功能：登出並清空資料 (使用精美自訂確認框) ---
       const handleLogout = () => {
-        setShowLogoutConfirm(true); // 叫出登出確認視窗
+        setShowLogoutConfirm(true); 
       };
 
-      // 新增：確定登出的執行動作
       const executeLogout = () => {
         window.localStorage.removeItem('plant_team_profile');
         window.localStorage.removeItem('plant_exploration_tasks');
@@ -913,7 +933,7 @@
       return (
         <div className="min-h-screen bg-[#F0FDF4] font-sans text-gray-800 selection:bg-emerald-200">
           
-          {/* 新增：自訂登出確認視窗 */}
+          {/* 自訂登出確認視窗 */}
           {showLogoutConfirm && (
             <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden text-center p-6">
@@ -927,29 +947,9 @@
             </div>
           )}
 
-          {/* 新增：自訂密碼輸入視窗 */}
-          {showPwdModal && (
-            <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div className="bg-slate-800 p-4 text-white text-center">
-                  <h3 className="text-xl font-bold">🔒 教師專屬後台</h3>
-                </div>
-                <form onSubmit={handlePwdSubmit} className="p-6">
-                  <p className="text-slate-600 mb-4 text-center">請輸入教師密碼以進入檢核系統：</p>
-                  <input type="password" value={pwdInput} onChange={e => {setPwdInput(e.target.value); setPwdError('');}} className="w-full p-3 border-2 border-slate-200 rounded-lg focus:border-blue-500 text-center text-xl tracking-[0.5em] font-bold" placeholder="••••" autoFocus />
-                  {pwdError && <p className="text-red-500 text-sm font-bold text-center mt-2">{pwdError}</p>}
-                  <div className="mt-6 flex gap-3">
-                    <button type="button" onClick={() => setShowPwdModal(false)} className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold rounded-lg hover:bg-slate-200">取消</button>
-                    <button type="submit" className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">登入</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
           {/* 教師專屬後台畫面 */}
           {showTeacherDashboard && (
-            <TeacherDashboard onClose={() => setShowTeacherDashboard(false)} db={db} appId={appId} />
+            <TeacherDashboard onClose={() => setShowTeacherDashboard(false)} db={db} appId={appId} currentClassId={teamProfile?.classId} />
           )}
 
           {syncMessage && <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] px-6 py-3 rounded-full shadow-lg text-lg font-bold text-white transition-all animate-fadeIn ${syncMessage.type === 'success' ? 'bg-green-500' : syncMessage.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}>{syncMessage.text}</div>}
@@ -959,24 +959,29 @@
           <header className="bg-emerald-700 text-white shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="text-center md:text-left">
-                {/* 加上隱藏點擊事件 */}
-                <h1 
-                  className="text-3xl md:text-4xl font-black tracking-wide cursor-pointer select-none" 
-                  onClick={handleTitleClick}
-                  title="連點 5 次可開啟教師後台"
-                >
+                <h1 className="text-3xl md:text-4xl font-black tracking-wide">
                   🌱 國中植物界探究學習網
                 </h1>
                 <p className="text-emerald-100 mt-2 text-sm md:text-base">觀察、辨識、探索，成為校園植物達人！</p>
               </div>
               {teamProfile && (
                 <div className="flex flex-col md:flex-row items-end md:items-center gap-3">
-                  <div className="bg-emerald-800/60 border border-emerald-600 rounded-xl p-3 flex items-center gap-4 shadow-inner">
+                  <div className={`border rounded-xl p-3 flex items-center gap-4 shadow-inner ${teamProfile.groupId === 99 ? 'bg-blue-800/60 border-blue-500' : 'bg-emerald-800/60 border-emerald-600'}`}>
                     <div className="text-right">
-                      <div className="font-black text-emerald-50 tracking-wider">{teamProfile.classId} 班 - 第 {teamProfile.groupId} 組</div>
-                      <div className="text-sm text-emerald-200 mt-0.5">座號：{teamProfile.seatNumbers.join(', ')}</div>
+                      <div className={`font-black tracking-wider ${teamProfile.groupId === 99 ? 'text-blue-50' : 'text-emerald-50'}`}>
+                        {teamProfile.classId} 班 - {teamProfile.groupId === 99 ? '老師組' : `第 ${teamProfile.groupId} 組`}
+                      </div>
+                      <div className={`text-sm mt-0.5 ${teamProfile.groupId === 99 ? 'text-blue-200' : 'text-emerald-200'}`}>
+                        座號：{teamProfile.seatNumbers.join(', ')}
+                      </div>
                     </div>
                     <div className="flex gap-2">
+                      {/* 如果是老師組，才會出現專屬後台按鈕 */}
+                      {teamProfile.groupId === 99 && (
+                        <button onClick={() => setShowTeacherDashboard(true)} className="bg-blue-500 hover:bg-blue-400 text-white p-2 rounded-lg transition-colors shadow-sm border border-blue-400 flex items-center gap-1" title="開啟教師後台">
+                          <span className="text-xl leading-none">👨‍🏫</span><span className="hidden md:inline font-bold text-sm">後台</span>
+                        </button>
+                      )}
                       <button onClick={() => setShowProfileModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg transition-colors shadow-sm" title="修改小組資訊">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                       </button>
