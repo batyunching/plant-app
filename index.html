@@ -183,6 +183,20 @@
       const [loading, setLoading] = useState(true);
       const [filterClass, setFilterClass] = useState(currentClassId || 'all');
 
+      // 新增：刪除特定小組資料的功能
+      const handleDeleteRecord = async (recordId, className, groupName) => {
+        if (window.confirm(`⚠️ 警告：確定要刪除「${className} 班 - ${groupName}」的所有資料嗎？\n刪除後將無法復原！`)) {
+          try {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('plant_records').doc(recordId).delete();
+            // 刪除成功後，直接更新畫面上的狀態，不用重新抓取全部資料
+            setRecords(prevRecords => prevRecords.filter(r => r.id !== recordId));
+          } catch (err) {
+            console.error("刪除失敗:", err);
+            alert("刪除失敗，請檢查網路狀態或權限！");
+          }
+        }
+      };
+
       const fetchRecords = async () => {
         setLoading(true);
         try {
@@ -269,8 +283,18 @@
                         <span className="bg-blue-600 text-white text-sm px-2 py-1 rounded-md">{record.teamProfile?.classId} 班</span>
                         {record.teamProfile?.groupId === 99 ? '老師組' : `第 ${record.teamProfile?.groupId} 組`}
                       </div>
-                      <div className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
-                        座號: {record.teamProfile?.seatNumbers?.filter(s=>s).join(', ') || '無'}
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+                          座號: {record.teamProfile?.seatNumbers?.filter(s=>s).join(', ') || '無'}
+                        </div>
+                        {/* 新增：刪除按鈕 */}
+                        <button 
+                          onClick={() => handleDeleteRecord(record.id, record.teamProfile?.classId, record.teamProfile?.groupId === 99 ? '老師組' : `第 ${record.teamProfile?.groupId} 組`)}
+                          className="text-red-400 hover:text-white hover:bg-red-500 p-1.5 rounded-lg transition-colors border border-transparent hover:border-red-600 shadow-sm"
+                          title="刪除此筆資料"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
                       </div>
                     </div>
                     
@@ -350,11 +374,11 @@
         </div>
       );
     }
-    // ==========================================
 
     function TeamProfileModal({ profile, onSave, onCancel, canCancel, isRestoring }) {
       const CLASSES = Array.from({ length: 13 }, (_, i) => 701 + i);
-      const GROUPS = Array.from({ length: 10 }, (_, i) => i + 1);
+      // 🔥 修改此處：將群組數量由 10 改為 14 🔥
+      const GROUPS = Array.from({ length: 14 }, (_, i) => i + 1);
 
       const [classId, setClassId] = useState(profile?.classId || 701);
       const [groupId, setGroupId] = useState(profile?.groupId || 1);
@@ -385,7 +409,6 @@
         e.preventDefault();
         
         if (isTeacher) {
-          // 教師專屬驗證：密碼必須是 8888 才能登入
           if (teacherPwd !== '8888') {
             setErrorMsg("教師密碼錯誤！無法登入。");
             setTimeout(() => setErrorMsg(''), 3000);
@@ -394,7 +417,6 @@
           setErrorMsg('');
           onSave({ classId, groupId, seatNumbers: ['老師'] });
         } else {
-          // 學生驗證
           if (seatNumbers.some(seat => !seat.toString().trim())) {
             setErrorMsg("請填寫所有組員的座號喔！");
             setTimeout(() => setErrorMsg(''), 3000);
@@ -433,7 +455,6 @@
                 </div>
               </div>
               
-              {/* 根據選擇的組別動態切換顯示內容 */}
               {!isTeacher ? (
                 <>
                   <div className="animate-fadeIn">
